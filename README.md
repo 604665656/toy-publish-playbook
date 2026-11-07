@@ -2,7 +2,8 @@
 
 一次真实上架的完整复盘：游戏《上下五千年 · 无尽编年》从 **7 轮内容驳回**到 **`status=published`** 的全部踩坑、误判、无效尝试与最终解法。
 
-- 📊 **在线看板**：<https://604665656.github.io/toy-publish-playbook/>
+- 📊 **在线看板（可视化）**：<https://604665656.github.io/toy-publish-playbook/>
+- 🗂 **GitHub 原生看板（Projects）**：<https://github.com/users/604665656/projects/12> — 39 张卡片按「处置状态」分列
 - 🎮 **线上 Toy**：<https://www.bilibili.com/toy/wqn/index.html>
 - 📦 **游戏源码**：<https://github.com/604665656/wqn>
 
@@ -17,6 +18,7 @@
 | `index.html` | 零依赖的单文件交互看板。可直接双击打开（`file://` 也能用），也可由 GitHub Pages 托管 |
 | `data/lessons.json` | 全部卡片的结构化源数据（分类 / 严重度 / 状态 / 现象 / 原因 / 解法 / 命令 / 标签） |
 | `scripts/build_board.py` | 把 JSON 注入模板重新生成 `index.html`；改完数据跑一次即可 |
+| `scripts/gh_project_sync.py` | 把同一份 JSON 同步到 GitHub Projects 原生看板（幂等，可重复运行） |
 | `docs/methodology.md` | **审核黑盒下的区间二分定位法**（可迁移到任何「不给理由」的审核） |
 | `docs/checklist.md` | 发布前 / 驳回后自检清单 |
 
@@ -70,6 +72,28 @@ published @ 2026-11-07 17:06
 上线前四道校验：Node VM 跑数据自检（要补 `document` / `location` 桩）→ `node --check` 校验内联脚本 → 入口字节数 → 真实浏览器打开确认渲染。
 
 > 注意：内置无头浏览器的 DOM 快照可能返回空字符串，是**假阴性**；判断渲染请以真实浏览器为准。
+
+---
+
+## GitHub 原生看板
+
+同一份 `data/lessons.json` 也会同步到 [Projects #12](https://github.com/users/604665656/projects/12)，视图「踩坑看板」为 `BOARD_LAYOUT`，按 `Status` 单选字段分成四列：
+
+| 列 | 张数 | 含义 |
+| --- | --- | --- |
+| 已解决 | 7 | 曾真实阻断发布，已定位并修好 |
+| 已验证有效 | 19 | 实测确认的规律或命令 |
+| 长期注意 | 10 | 环境 / 平台行为，换机器仍要留意 |
+| 已试无效 | 3 | 走过的死路，明确不要再试 |
+
+卡片正文含现象、原因、处理、可复制命令与标签，标题带 `[R01]` 这类编号，便于和在线看板、JSON 对上。
+
+```bash
+python scripts/gh_project_sync.py --report   # 只看当前状态
+python scripts/gh_project_sync.py            # 增量同步（幂等，不会重复建卡）
+```
+
+凭据取本机 `git credential fill`（需要 `repo` + `project` 权限），脚本不保存也不打印 token；改完 `data/lessons.json` 后先跑 `build_board.py` 再跑 `gh_project_sync.py`，两个看板保持一致。
 
 ---
 

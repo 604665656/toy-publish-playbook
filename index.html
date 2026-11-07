@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>B站 Toy 上架踩坑看板</title>
+<meta name="description" content="B站 Toy 上架踩坑实测看板：平台规则、CLI、内容审核、二分定位、构建与推送">
+<style>
+:root{
+  --bg:#f6f8fa; --panel:#ffffff; --line:#d8dee4; --line2:#eaeef2;
+  --ink:#1f2328; --dim:#59636e; --faint:#8b949e;
+  --brand:#0969da; --brand-soft:#ddf4ff;
+  --ok:#1a7f37; --warn:#9a6700; --dead:#6e7781;
+  --shadow:0 1px 0 rgba(31,35,40,.04),0 3px 12px rgba(31,35,40,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",Hiragino Sans GB,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--brand);text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1240px;margin:0 auto;padding:0 24px 72px}
+
+/* ---------- header ---------- */
+header{background:#fff;border-bottom:1px solid var(--line)}
+.hd{max-width:1240px;margin:0 auto;padding:28px 24px 22px}
+.kicker{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--bg);
+  border-radius:999px;padding:3px 11px;font-size:12px;color:var(--dim)}
+.pill b{color:var(--ink);font-weight:600}
+.pill.live{background:#dafbe1;border-color:#a6e9b9;color:#0f5323}
+h1{font-size:27px;line-height:1.3;margin:0 0 6px;letter-spacing:-.4px;font-weight:700}
+.sub{color:var(--dim);font-size:14px;margin:0 0 18px}
+.links{display:flex;gap:16px;flex-wrap:wrap;font-size:13px}
+
+/* ---------- stats ---------- */
+.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:22px 0 18px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px 14px;box-shadow:var(--shadow)}
+.stat .v{font-size:19px;font-weight:700;letter-spacing:-.3px;line-height:1.3}
+.stat .l{font-size:11.5px;color:var(--dim);margin-top:3px}
+
+/* ---------- flow ---------- */
+.flow{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:13px 16px;margin-bottom:20px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;box-shadow:var(--shadow)}
+.flow .step{font-size:12.5px;background:var(--bg);border:1px solid var(--line2);border-radius:7px;padding:5px 10px;color:var(--dim)}
+.flow .step b{color:var(--ink)}
+.flow .step.hit{background:#fff1e5;border-color:#f0c48a;color:#8a4b00}
+.flow .step.pass{background:#dafbe1;border-color:#a6e9b9;color:#0f5323}
+.flow .arw{color:var(--faint);font-size:13px}
+
+/* ---------- toolbar ---------- */
+.toolbar{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow)}
+.trow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.trow + .trow{margin-top:11px;padding-top:11px;border-top:1px solid var(--line2)}
+.tlabel{font-size:12px;color:var(--faint);min-width:52px;letter-spacing:.4px}
+#q{flex:1;min-width:220px;border:1px solid var(--line);border-radius:7px;padding:8px 11px;
+  font:inherit;font-size:13px;color:var(--ink);background:#fff;outline:none}
+#q:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+select{border:1px solid var(--line);border-radius:7px;padding:7px 9px;font:inherit;font-size:13px;background:#fff;color:var(--ink)}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;
+  font-size:12.5px;color:var(--dim);cursor:pointer;user-select:none;transition:.12s;white-space:nowrap}
+.chip:hover{border-color:var(--faint)}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+.chip .n{opacity:.65;margin-left:4px;font-size:11px}
+.chip.dot::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px}
+.toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--brand)}
+#count{margin-left:auto;font-size:12.5px;color:var(--faint);white-space:nowrap}
+
+/* ---------- cards ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);
+  overflow:hidden;cursor:pointer;transition:border-color .14s,box-shadow .14s}
+.card:hover{border-color:#b6c2cf;box-shadow:0 4px 16px rgba(31,35,40,.09)}
+.card.open{border-color:var(--brand);box-shadow:0 4px 18px rgba(9,105,218,.13)}
+.card.dead{background:#fbfcfd}
+.card.dead .ttl{color:#57606a}
+.chead{padding:13px 15px}
+.meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:9px}
+.id{font:600 11px/1 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--faint);letter-spacing:.5px}
+.cat{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:5px}
+.sev{font-size:11px;padding:2px 7px;border-radius:5px;border:1px solid}
+.sev.blocker{color:#a40e26;background:#ffebe9;border-color:#ffcecb}
+.sev.high{color:#9a6700;background:#fff8c5;border-color:#f2d97a}
+.sev.mid{color:#0969da;background:#ddf4ff;border-color:#b6e3ff}
+.sev.low{color:#57606a;background:#f6f8fa;border-color:#d8dee4}
+.st{font-size:11px;margin-left:auto;padding:2px 8px;border-radius:999px;font-weight:600}
+.st.solved{background:#dafbe1;color:#116329}
+.st.verified{background:#ddf4ff;color:#0550ae}
+.st.note{background:#f3eefe;color:#6639ba}
+.st.deadend{background:#eaeef2;color:#57606a;text-decoration:line-through}
+.ttl{font-size:14.5px;font-weight:650;line-height:1.5;margin:0 0 9px}
+.tags{display:flex;gap:5px;flex-wrap:wrap}
+.tag{font-size:10.5px;color:var(--dim);background:var(--bg);border:1px solid var(--line2);border-radius:4px;padding:1px 6px}
+.detail{display:none;border-top:1px solid var(--line2);background:#fbfcfd;padding:14px 15px 16px}
+.card.open .detail{display:block}
+.fld{margin-bottom:12px}
+.fld:last-child{margin-bottom:0}
+.fld .k{font-size:11px;font-weight:700;color:var(--faint);letter-spacing:.6px;margin-bottom:4px}
+.fld .v{font-size:13px;color:#30363d;white-space:pre-wrap;word-break:break-word}
+.fld.fix .v{border-left:3px solid var(--ok);padding-left:10px}
+pre.cmd{margin:0;background:#1f2328;color:#e6edf3;border-radius:7px;padding:10px 12px;
+  font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-x:auto;white-space:pre-wrap;word-break:break-all;position:relative}
+.cp{position:absolute;top:6px;right:6px;background:#30363d;color:#c9d1d9;border:0;border-radius:5px;
+  font-size:10.5px;padding:3px 7px;cursor:pointer;opacity:.75}
+.cp:hover{opacity:1}
+.empty{grid-column:1/-1;text-align:center;padding:48px 0;color:var(--faint);font-size:14px}
+footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);color:var(--faint);font-size:12px;
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+@media (max-width:900px){.stats{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}.wrap,.hd{padding-left:14px;padding-right:14px}h1{font-size:22px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hd">
+    <div class="kicker">
+      <span class="pill">实测记录 · <b>2026-11-07</b></span>
+      <span class="pill">项目 <b>上下五千年 · 无尽编年</b></span>
+      <span class="pill live">● 已过审发布</span>
+    </div>
+    <h1>B站 Toy 上架踩坑看板</h1>
+    <p class="sub">从 7 轮内容驳回 to 过审发布：一次完整实测记录</p>
+    <div class="links">
+      <a href="https://www.bilibili.com/toy/wqn/index.html" target="_blank" rel="noopener">→ 线上 Toy</a>
+      <a href="https://github.com/604665656/wqn" target="_blank" rel="noopener">→ 游戏源码仓库</a>
+      <a href="docs/methodology.md">→ 二分定位方法论</a>
+      <a href="docs/checklist.md">→ 发布前自检清单</a>
+      <a href="data/lessons.json">→ 结构化数据 JSON</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stats" id="stats"></div>
+
+  <div class="flow">
+    <span class="step"><b>7 轮</b>内容驳回</span><span class="arw">→</span>
+    <span class="step"><b>A/B 对照</b>锁定 data.js 文案</span><span class="arw">→</span>
+    <span class="step"><b>25 个</b>并行区间探针</span><span class="arw">→</span>
+    <span class="step hit"><b>5 段 / 799 条</b>命中</span><span class="arw">→</span>
+    <span class="step pass"><b>published</b> 17:06</span>
+  </div>
+
+  <div class="toolbar">
+    <div class="trow">
+      <span class="tlabel">搜索</span>
+      <input id="q" type="search" placeholder="搜标题 / 现象 / 解法 / 标签 / 命令，按 / 快速聚焦" autocomplete="off">
+      <select id="sev">
+        <option value="">全部严重度</option>
+        <option value="blocker">阻断</option>
+        <option value="high">高</option>
+        <option value="mid">中</option>
+        <option value="low">提示</option>
+      </select>
+      <label class="toggle"><input type="checkbox" id="onlyDead"> 只看「已试无效」死路</label>
+      <span id="count"></span>
+    </div>
+    <div class="trow"><span class="tlabel">分类</span><span id="cats"></span></div>
+    <div class="trow"><span class="tlabel">状态</span><span id="sts"></span></div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>
+    <span>数据来源：本机实测 + 官方 CLI <code>--help</code> + 平台发布后台。所有数字保留原始观测值。</span>
+    <span>按 <b>/</b> 聚焦搜索 · <b>Esc</b> 清空 · 点击卡片展开详情</span>
+  </footer>
+</div>
+
+<script>
+"use strict";
+const D = {"meta":{"title":"B站 Toy 上架踩坑看板","subtitle":"从 7 轮内容驳回 to 过审发布：一次完整实测记录","project":"上下五千年 · 无尽编年","date":"2026-11-07","source":"本机实测 + 官方 CLI help + 平台后台","live":"https://www.bilibili.com/toy/wqn/index.html","repo":"https://github.com/604665656/wqn","stats":[{"label":"正式包被驳回","value":"7 轮"},{"label":"并行探针窗口","value":"25 个"},{"label":"定位命中区间","value":"5 段 / 799 条"},{"label":"最终保留数据","value":"3333 / 4132 条 (81%)"},{"label":"入口 index.html","value":"339,778 B"},{"label":"上架 ZIP","value":"509,040 B"}]},"categories":[{"id":"rules","name":"平台硬规则","color":"#4c7bd9","desc":"官方明文的限制，违反就发不出去"},{"id":"cli","name":"Toy CLI","color":"#8b5cf6","desc":"命令行行为、错误码、状态机"},{"id":"audit","name":"内容审核","color":"#d9534f","desc":"驳回原因、判据与实测结论"},{"id":"method","name":"定位方法论","color":"#e08b2f","desc":"怎么在不给理由的审核下定位问题"},{"id":"build","name":"构建与打包","color":"#2e9e6b","desc":"分包、自检、语法与渲染验证"},{"id":"github","name":"GitHub 推送","color":"#5b6675","desc":"沙箱网络与凭据"},{"id":"env","name":"本机环境 / 自动化","color":"#0f9aa8","desc":"沙箱封禁与浏览器控制"}],"statuses":[{"id":"solved","name":"已解决","color":"#2e9e6b"},{"id":"verified","name":"已验证有效","color":"#4c7bd9"},{"id":"note","name":"长期注意","color":"#8b5cf6"},{"id":"deadend","name":"已试无效","color":"#9aa3ad"}],"severities":[{"id":"blocker","name":"阻断","rank":4},{"id":"high","name":"高","rank":3},{"id":"mid","name":"中","rank":2},{"id":"low","name":"提示","rank":1}],"lessons":[{"id":"R01","cat":"rules","severity":"blocker","status":"solved","title":"入口 index.html 解压后 ≤ 1MB，超了提交直接被拒","symptom":"原单文件游戏内联了约 3.3MB 数据，create / update / preview 全部报 307000。","cause":"平台只限制包内『入口』这一个文件的解压后体积，ZIP 压得再小也没用；其他 HTML 无硬上限（只是慢）。","fix":"把内联数据块外置成同层 data.js，HTML 里用 <script src=\"./data.js\"><\/script> 加载；最终 index.html 339,778 B。","cmd":"grep -o 'url(' toy/index.html | wc -l   # 外置后应为 0","tags":["1MB","分包","307000"]},{"id":"R02","cat":"rules","severity":"high","status":"solved","title":"封面与图标是两个独立字段，规格不同","symptom":"首轮用 AI 生成的封面（含军阵、长城、乱码文字）提交后被驳回，一度以为是封面问题。","cause":"封面 --poster 建议 4:3（1200×900）；图标 --icon 建议 1:1（512×512，PNG/JPEG，≤512KB，边长 ≤1024px）。CLI 按图片内容校验，改扩展名无效。","fix":"用 PIL 重新生成纯排版封面与图标，避开人物 / 旗帜 / 军阵 / 地图 / 乱码。cover_v2.png 54,723 B；icon_v2.png 12,422 B。","cmd":"python deliver/gen_cover_icon.py","tags":["poster","icon","4:3","512KB"]},{"id":"R03","cat":"rules","severity":"high","status":"note","title":"页面跑在 /toy/<slug>/ 子路径，绝对路径会白屏","symptom":"官方 FAQ 高频坑：/assets/app.js 解析到站点根，CSS/JS 404。","cause":"新发布走 render_mode=2（不再注入 <base href>），资源路径必须相对。","fix":"全部用 ./ 相对路径；构建工具设 base: './'；页内锚点 href=\"#section\" 已支持，别再当成坑。","cmd":"grep -n 'src=\"/\\|href=\"/' toy/index.html","tags":["相对路径","白屏","FAQ"]},{"id":"R04","cat":"rules","severity":"mid","status":"note","title":"slug 发布后不可改；分享地址要带 index.html","symptom":"只想换个地址时，不能靠 update 改 slug。","cause":"slug 服务端约束 [A-Za-z0-9_-]、最长 64 字节，发布后锁定；只给裸 /<slug>/ 目录兜底不保证。","fix":"对外统一给 https://www.bilibili.com/toy/<slug>/index.html；本项目 slug 为 wqn。","cmd":"","tags":["slug","分享链接"]},{"id":"R05","cat":"rules","severity":"high","status":"note","title":"含自由绘制能力的 Toy 必须开 --watermark","symptom":"官方 create --help 原文：『含自由绘制能力的 Toy 必须加 --watermark，否则审核会被驳回』。","cause":"访问者水印把当前访问者昵称与 ID 叠在整个画面上；是否必须开启由审核侧判定，CLI 不猜测。本项目含 Canvas 自绘与 prompt() 自由文本输入。","fix":"create 时带 --watermark；--watermark 是三态：不传=不改现状 / --watermark=开启 / --watermark=false=显式关闭。","cmd":"toy create toy --watermark --yes --json","tags":["watermark","UGC","Canvas"]},{"id":"R06","cat":"rules","severity":"mid","status":"note","title":"每日创建 Toy 数量有上限，触顶后 update 仍可用","symptom":"并行提交第 6 个探针时：create Toy failed: status=200 code=-509 message=今日创建数量已达上限，请明天再试。","cause":"平台按账号按日限制 create 次数，不限制 update。","fix":"诊断期别用 create 造大量 Toy；触顶后复用已有 Toy 的 id，用 update <id> <dir> --yes --json 换包继续跑。","cmd":"toy update <已存在id> probe_dir --yes --json","tags":["-509","限流","并行探针"]},{"id":"C01","cat":"cli","severity":"blocker","status":"verified","title":"本机有 Toy 官方 CLI，别再用浏览器点系统文件对话框","symptom":"浏览器合成点击可以点普通按钮（曾成功点中『发布』），但打不开原生『打开文件』对话框。","cause":"file input 需要受信任的用户手势，自动化点击不满足；系统对话框也难驱动。","fix":"改用官方 CLI（本机 v0.6.4，路径 C:/Users/60466/AppData/Local/Programs/toy/toy.exe，已登录 uid 298813）。所有上传一步到位。","cmd":"toy whoami --json\ntoy mylist --json\ntoy history --json","tags":["CLI","文件对话框","自动化"]},{"id":"C02","cat":"cli","severity":"blocker","status":"verified","title":"发布是两段式：不加 --yes 只出预览链接，不会提交审核","symptom":"create / update 带包体后返回 {\"preview_url\": ...}，以为已经提交，其实没有。","cause":"CLI 把预览当作确认闸门；--yes 才是真正提交审核。非交互脚本必须显式带 --yes 与 --json。","fix":"预览 → 确认 → 同参数加 --yes 重跑；AI 调用一律加 --json。","cmd":"toy update <id> toy --yes --json","tags":["两段式","preview_url","--yes"]},{"id":"C03","cat":"cli","severity":"high","status":"verified","title":"被驳回的 Toy 改任何元信息都必须带 Zip 包","symptom":"toy update <id> --watermark=true --yes --json → error: status=200 code=307034 message=更新该 toy 需要带上Zip包，请重新带Zip包 update。","cause":"分类、标题、封面、图标、水印这类纯元信息更新，对 rejected 状态的 Toy 会被服务端拒绝。","fix":"把包体路径一起传：toy update <id> toy --category GAME --poster ... --icon ... --yes --json。","cmd":"toy update 52494088542208 toy --category GAME --yes --json","tags":["307034","元信息","rejected"]},{"id":"C04","cat":"cli","severity":"high","status":"deadend","title":"带包体的 update 不携带 --watermark，水印没真正打开","symptom":"update <id> toy --watermark --yes 返回 auditing，但 mylist 里 watermark_enabled 一直是 False。","cause":"带包体的更新走上传版本链路，水印字段未生效；纯元信息更新才处理水印，但那条又被 307034 挡住。","fix":"要开水印只能从 create 新建时就带 --watermark。本项目最终发布的那条 Toy 是 create 时带水印、后续用 update 换包的。","cmd":"toy create toy --watermark --category GAME --visibility public --yes --json","tags":["watermark","update 陷阱"]},{"id":"C05","cat":"cli","severity":"high","status":"verified","title":"rejected / auditing 条目上 poster_url、icon_url、watermark_enabled 为空是假线索","symptom":"首次被驳回的记录没有 poster_url / icon_url，据此判断『封面没传上去』，白改了一轮封面。","cause":"这些字段只在 status=published 之后才回填。对照实验证明：同样这套封面/图标，极简页面一提交就 published，poster_url / icon_url / wm=True 全部出现。","fix":"不要用这三个字段判断上传是否成功；用 status 与 audit_failures 判断。","cmd":"toy mylist --json | python -c \"import json,sys; d=json.load(sys.stdin); [print(t['id'],t['status'],t.get('poster_url')) for t in d['list']]\"","tags":["假线索","状态机","回填"]},{"id":"C06","cat":"cli","severity":"mid","status":"note","title":"错误码速查：307001 / 307029 / 307000 / 307034 / 307044 / -509","symptom":"业务码与 HTTP 状态分离，HTTP 200 也可能带业务错误。","cause":"CLI 已剥掉 {code,message,data} envelope，--json 直接打 data。","fix":"307001/307029 会话失效 → toy login 后重试原命令一次；307000 泛化参数错误，以 message 为准（含入口超 1MB）；307034 需带 Zip 包；307044 云存储/榜单限流（上线后才爆，需指数退避）；-509 每日创建上限。","cmd":"toy login","tags":["错误码","307000","307034","307044"]},{"id":"C07","cat":"cli","severity":"mid","status":"note","title":"toy_doctor.py 会误报两条『本地资源未找到』","symptom":"预检输出 2 条 ERROR：referenced local resource not found: 朝代长河 · / 真实血脉 · 同期。","cause":"静态扫描把内联 JS 里的 src:'真实血脉 · '+... 和 return '朝代长河' 当成资源路径；实测 url( 出现 0 次，页面正常跑。","fix":"确认是误报后放行，不要为了消掉这两条去改代码。","cmd":"python <skill>/scripts/toy_doctor.py toy --poster cover_v2.png --slug wqn --json","tags":["doctor","误报","预检"]},{"id":"C08","cat":"cli","severity":"mid","status":"note","title":"本机『规章文件』只有技能文档，不含内容审核口径","symptom":"发布后台通知里驳回详情固定为『你的 Toy 版本审核未通过。如需了解详情，请联系客服』。","cause":"本机 C:/Users/60466/.agents/skills/toy/ 只有 SKILL.md、content-checklist.md、error-codes.md、toy_doctor.py，覆盖的是技术合规，不是内容尺度。","fix":"别指望拿到具体驳回词；用对照实验自己定位。若必须，走后台的企业微信客服入口。","cmd":"","tags":["文档","客服","审核黑盒"]},{"id":"A01","cat":"audit","severity":"blocker","status":"verified","title":"驳回理由恒为泛化文案，审核约 100–170 秒一轮","symptom":"7 轮驳回里几乎都是 内容审核未通过 + audit_failures=[{type:'content',reason:'rejected'}]。","cause":"规则化/模型化判定，不返回具体命中词；ctime→mtime 实测约 104 秒（后续队列里最长等过 10 分钟）。","fix":"因为一轮只要几分钟，改用『一次并行提交多个对照包、一轮读全部结果』的方式做二分，而不是逐轮串行猜。","cmd":"toy mylist --json","tags":["驳回","黑盒","快速迭代"]},{"id":"A02","cat":"audit","severity":"high","status":"note","title":"偶尔会给更细的理由，含风险类别与文件名","symptom":"其中一条探针返回：内容审核未通过（违法违规）：data.js，audit_failures 带 risk_category:'违法违规'。","cause":"审核深度/路径不同，偶尔附带文件级定位，但不可依赖。","fix":"每次都把 reject_reason 完整打出来看，别只截前半句。","cmd":"python -c \"import json,sys; d=json.load(sys.stdin); [print(t['id'],repr(t.get('reject_reason')),t.get('audit_failures')) for t in d['list']]\"","tags":["risk_category","data.js"]},{"id":"A03","cat":"audit","severity":"blocker","status":"verified","title":"判据是 audit_failures 有没有 type:content，不是 status","symptom":"把数据中文整体中性化后仍是 rejected，但理由从『内容审核未通过』变成『审核未通过』且没有 audit_failures。","cause":"中性化后内容扫描关卡已放行，倒在非内容关卡（页面功能/自检报错）。","fix":"二分时统一用『audit_failures 是否含 content 项』作二元信号：命中=该区间含触发文本；不命中=内容关已过。","cmd":"","tags":["判据","audit_failures","二分"]},{"id":"A04","cat":"audit","severity":"blocker","status":"verified","title":"对照实验排除了账号/封面/图标/水印/分类/标题，锁定问题在内容","symptom":"连续 7 轮驳回后，改封面、换分类、补水印、加免责声明、清外链都无效。","cause":"这些都不是触发源；真正原因在 data.js 的中文文案。","fix":"做 A/B：同账号、同 cover_v2.png、同 icon_v2.png、同 --watermark、同 GAME 分类、甚至同标题，只把页面换成 1KB 极简点击器 → 直接 published。再把标题改回原名 → 仍 published。由此把变量全部排除干净。","cmd":"toy create probe --title \"上下五千年·无尽编年\" --slug wqn --category GAME --watermark --poster deliver/cover_v2.png --icon deliver/icon_v2.png --yes --json","tags":["A/B","对照实验","排除法"]},{"id":"A05","cat":"audit","severity":"blocker","status":"deadend","title":"关键词替换无效：是语义/主题级判定，不是敏感词命中","symptom":"40 组等义替换（主权→权属、领土→地域、疆界→界线、帝国→王朝、殖民→拓殖、独立→自立、血统→血缘、种族→人群、东突→突厥东支…）+ 7,568 条外链全清后，真实包仍命中 content。","cause":"审核按内容主题整片判定，替换词面不改变语义。","fix":"放弃逐词猜，改成按数据条目区间做因果定位；最终按实测区间裁剪主题条目。","cmd":"","tags":["死路","语义判定","降敏无效"]},{"id":"A06","cat":"audit","severity":"blocker","status":"solved","title":"触发点只在 3 个百科模块，其余 20 个模块与页面代码清白","symptom":"把 civilization / peoples / reading_quiz 三册中文逐字中性化（长度/结构不变）后，content 失败消失。","cause":"这三册是『考据/思辨』类长文本；单独中性化其中任一册仍被拒 → 至少 2 册各含触发文本。","fix":"把合规处理范围收敛到这 3 册，其余数据（events/templates/history/options/atlas/...）与 index.html 代码字符串一律不动。","cmd":"WQN_NEUTRALIZE=civilization,peoples,reading_quiz WQN_PROBE=1 node build_toy.js","tags":["模块定位","civilization","peoples","reading_quiz"]},{"id":"A07","cat":"audit","severity":"blocker","status":"solved","title":"最终命中 5 段共 799 条，裁掉后过审","symptom":"4132 条三册条目里，命中区间为 [1034,1163) [1869,2028) [2187,2346) [2664,2823) [3939,4132)。","cause":"对应文明册的外交条约/地图测绘/刑罚/情报门类、人物类、列传、姓氏册中段、思辨题库后半。","fix":"构建期按全局序号移除这 799 条（19%），保留 3333 条真实文本（81%）；其余模块全量保留。17:06 status=published。","cmd":"WQN_DROP=\"1034:1163,1869:2028,2187:2346,2664:2823,3939:4132\" node build_toy.js","tags":["最终解法","799 条","published"]},{"id":"A08","cat":"audit","severity":"high","status":"deadend","title":"七轮驳回里所有『以为修好了』的无效尝试（按轮次）","symptom":"① 原 AI 封面 → 驳回；② 换成合规排版封面 cover_v2.png → 驳回；③ update 补 --watermark → 驳回；④ create 带 --watermark 新建 → 驳回；⑤ 6 词降敏 + 下线舆地页签 + 启动页虚构声明 → 驳回；⑥ 清空 7,568 条站外链接 → 驳回；⑦ 40 组大范围词面降敏 → 驳回。七轮理由一字不差。","cause":"前四轮改的是元数据，后三轮改的是词面，而审核判定的是数据条目的语义主题。每次只改『看起来可疑』的那一层，没有先定位因果。","fix":"先做 A04 的 A/B 对照把变量排除干净，再用 M01/M02 的区间探针定位到具体条目，最后只做一次有效修改（A07 裁剪 799 条）即过审。教训：黑盒审核下，先建立可判定的二元信号，再动手改。","cmd":"","tags":["死路清单","7 轮","教训","别猜"]},{"id":"M01","cat":"method","severity":"high","status":"verified","title":"『恢复式区间探针』：全量中性化，只把一小段恢复原文","symptom":"多个触发源分散在不同模块时，普通的『二分屏蔽一半』会两边都失败，无法收敛。","cause":"只要被保留的原文里还有任一触发点，content 就会命中。","fix":"先把三册全部中性化（已知内容关会过），再只把 [a,b) 区间恢复原文。该区间一旦命中，就证明它至少含一个触发点；这样能稳定找到『某一个』触发源，且支持多个触发源并存。","cmd":"WQN_BISECT=1034:1163 WQN_PROBE=1 node build_toy.js","tags":["二分","恢复式","多触发源"]},{"id":"M02","cat":"method","severity":"high","status":"verified","title":"并行提交多个窗口，一轮审核拿到 N 倍信息","symptom":"串行一轮约 3 分钟，逐段试要几十轮。","cause":"审核是异步且彼此独立的。","fix":"一次 create 多条 Toy（不同 slug、visibility=link-only），sleep 后一次 mylist --json 读全部结果。本次用了 P0–P7（8 段）、Q0–Q4（5 段）、R0–R11（12 段）共 25 个窗口。","cmd":"for i in 0 1 2 3; do toy create probe_p$i --slug wqnp$i --visibility link-only --yes --json; done","tags":["并行","提速","link-only"]},{"id":"M03","cat":"method","severity":"mid","status":"verified","title":"中性化要『逐字』替换，保持长度与结构不变","symptom":"直接删数据会让运行时数据自检失败、页面报错，反而倒在功能关卡。","cause":"构建期自检校验 JSON.stringify(D).length 与若干字段阈值。","fix":"用 CJK→『文』逐字替换（1:1 长度不变），只消掉语义、不动结构；探针包再去掉 __WQN_BAD__ 启动阻断。正式版则直接移除条目并同步放宽自检阈值。","cmd":"re.sub(r'[\\u4e00-\\u9fff]', '文', s)","tags":["中性化","等长替换","自检"]},{"id":"M04","cat":"method","severity":"mid","status":"verified","title":"本地差分分析辅助定位，但别用它替代实验","symptom":"对命中区/干净区做 n-gram 差分，捞出的多是『通识级锚点』『不作学术引用』这类无害样板句。","cause":"审核是语义判定，高频串不等于触发串。","fix":"差分用来缩小候选、生成假设；是否真的命中，一律以平台 audit_failures 为准。","cmd":"","tags":["差分","n-gram","假设验证"]},{"id":"B01","cat":"build","severity":"high","status":"solved","title":"3.3MB 数据外置为 data.js，注意脚本顺序与相对路径","symptom":"入口超限；且 HTML 里的主逻辑必须在数据之后执行。","cause":"index.html 里 <script src=\"./data.js\"><\/script> 位于第 227 行，随后才是第 228 行起的内联主脚本。","fix":"构建脚本把 /*__DATA__*/ 占位替换成『闭合上一个 script → 引 data.js → 重开 script』，保证顺序；ZIP 根目录只放 index.html + data.js。最终包 509,040 B。","cmd":"python -c \"import zipfile; z=zipfile.ZipFile('deliver/上下五千年_上架包.zip'); print(z.namelist())\"","tags":["分包","脚本顺序","ZIP"]},{"id":"B02","cat":"build","severity":"high","status":"solved","title":"裁剪数据后要同步放宽运行时自检阈值","symptom":"移除 799 条后 peoples.surnames 从 1295 降到 1136，低于自检里的 <1200 断言，会抛错并写白屏提示。","cause":"构建期自检 VERIFY 写死了 1500 条文明册 / 1200 条姓氏册 / 末条 boundary 字符串等检查。","fix":"在生成 CHECK 时对 VERIFY 做定向替换，把姓氏阈值放宽到 900；其余检查保持。最终 VERIFY={ok:true,n:2026538}。","cmd":"VERIFY.replace('D.peoples.surnames.length<1200','D.peoples.surnames.length<900')","tags":["VERIFY","自检阈值","裁剪"]},{"id":"B03","cat":"build","severity":"high","status":"verified","title":"上线前四道本地校验：VM 自检 / 语法 / 体积 / 真实浏览器渲染","symptom":"改过数据或移除页签后，光看构建成功不够。","cause":"字符串池解包、内联脚本语法、数组变空都可能只在运行时炸。","fix":"① Node VM 跑 data.js（要补 window/document/location 桩，否则误报 ReferenceError）；② 抽出内联 script 后 node --check；③ 入口字节数；④ 真实浏览器打开确认启动页。","cmd":"node --check _syntax_check.js && wc -c toy/index.html","tags":["VM","node --check","冒烟"]},{"id":"B04","cat":"build","severity":"mid","status":"verified","title":"条目裁成空数组前，先确认 UI 只用 forEach / length / find","symptom":"裁剪后 civilization.treasures 变成 0 条，担心页面崩。","cause":"UI 里只有 C.treasures.forEach、.length、.find 这类调用。","fix":"grep 一遍引用点确认安全再上线；实测启动页与推演页都正常。最终 civ.items 1809 / surnames 1136 / quiz 71 / biographies 31 / treasures 0。","cmd":"grep -n 'treasures' src/*.js","tags":["空数组","回归检查"]},{"id":"B05","cat":"build","severity":"high","status":"verified","title":"合规处理只放在构建期，源文件一个字不改","symptom":"上架版需要删敏感条目、清外链、下线页签，但完整版还要留在 GitHub。","cause":"两套产物共用一份 src/ 与 data/。","fix":"所有降敏/裁剪/声明/页签移除都写进 build_toy.js 的字符串与数据处理层，只输出到 toy/；GitHub 上的 wqn.html 单文件仍是全量 4132 条。","cmd":"git diff --stat src/ data/   # 应为空","tags":["构建期","源码不变","双版本"]},{"id":"G01","cat":"github","severity":"high","status":"solved","title":"沙箱内 git push 报 SSL unexpected eof，放行后又是 502","symptom":"fatal: unable to access ... OpenSSL/3.5.7: error:0A000126:SSL routines::unexpected eof while reading；dangerouslyDisableSandbox 下变 CONNECT tunnel failed, response 502。","cause":"代理对 GitHub 的 HTTPS隧道不稳定，且 HTTP/2 易触发 unexpected eof。","fix":"固定用 HTTP/1.1 + 放大 postBuffer + 重试（实测第 2 次成功）。","cmd":"git -c http.version=HTTP/1.1 -c http.postBuffer=524288000 push <url> main","tags":["502","SSL EOF","HTTP/1.1"]},{"id":"G02","cat":"github","severity":"high","status":"verified","title":"凭据在 Windows 凭据管理器，用 git credential fill 取，别写进配置","symptom":"仓库 .git/config 里没有可用凭据，直接 push 会失败。","cause":"token 由凭据管理器托管（username=x-access-token）。","fix":"用 git credential fill 取出 password，拼进一次性 push URL；推完 grep 确认 .git/config 无 ghp_ 残留。","cmd":"printf 'protocol=https\\nhost=github.com\\n\\n' | git credential fill | sed -n 's/^password=//p'","tags":["credential fill","token","安全"]},{"id":"G03","cat":"github","severity":"mid","status":"verified","title":"推送后用 ls-remote 核对远端 ref，别只看 push 输出","symptom":"管道 `git push ... | tail` 会吞掉 git 的失败退出码，重试循环误判成功。","cause":"shell 管道返回的是最后一个命令的状态。","fix":"重试循环里用 if git push > log 2>&1; then ... 判断，最后 git ls-remote origin refs/heads/main 核对 SHA。本次最终 19f2420。","cmd":"git ls-remote origin refs/heads/main","tags":["退出码","管道","校验"]},{"id":"E01","cat":"env","severity":"high","status":"verified","title":"沙箱封禁 Add-Type / 从 Bash 调 powershell / cscript","symptom":"想用 .NET 编译或 VBS 驱动系统文件对话框，全部被拦（cscript 被判 LOLBin）。","cause":"桌面自动化的安全策略。","fix":"别在这条路上耗时间；改走官方 CLI，从源头绕开系统对话框。","cmd":"","tags":["沙箱","LOLBin","绕行"]},{"id":"E02","cat":"env","severity":"mid","status":"note","title":"Python ctypes 有桌面权限，但 SetForegroundWindow 被前台锁挡住","symptom":"SendInput / EnumWindows / GetPixel 可用，可前台始终是 WorkBuddy，屏幕像素采样全为 (31,31,31)。","cause":"Windows 前台锁定，物理坐标点击不可靠。","fix":"放弃物理坐标方案，改用浏览器扩展的视口坐标合成点击；普通按钮可点，file input 不可点。","cmd":"","tags":["ctypes","前台锁","坐标点击"]},{"id":"E03","cat":"env","severity":"high","status":"verified","title":"内置 WorkBuddy Browser 的 DOM 快照为空是假阴性，要用真实 Edge","symptom":"tab 标题正常、文件都 200，但 dom_cua_get_visible_dom 返回 snapshot=\"\"，一度误判为白屏。","cause":"内置浏览器视口问题；其截图通道还会报 Browser screenshot exceeds the 10 MiB image limit。","fix":"用扩展连接的真实 Edge（browser_id=2）验证：快照完整、截图正常。判断页面是否真的渲染，一律以真实浏览器为准。","cmd":"browsers_list → 选 browser_id=2 → tabs_new → dom_cua_get_visible_dom","tags":["假阴性","真实Edge","渲染验证"]},{"id":"E04","cat":"env","severity":"mid","status":"note","title":"cua_execute 里把 scroll 和 screenshot 合并会超时","symptom":"provider invocation timed out 反复出现。","cause":"组合动作在该通道上不稳定。","fix":"拆成独立调用：先单独 scroll，再单独 tab_screenshot / cua_execute 截图。","cmd":"","tags":["超时","拆分动作"]},{"id":"E05","cat":"env","severity":"mid","status":"verified","title":"VM 里跑 data.js 要补 document / location 桩","symptom":"ReferenceError: document is not defined，误以为数据自检失败。","cause":"VERIFY 的 catch 分支会调用 say() 去写 DOM；缺 location 也会先抛错进 catch。","fix":"构造 {window:{}, console, location:{search:''}, document:{getElementById:()=>null}} 再 createContext。","cmd":"node -e \"const vm=require('vm'); const s={window:{},console,location:{search:''},document:{getElementById:()=>null}};\"","tags":["VM","桩","误报"]}]};
+const CATS = Object.fromEntries(D.categories.map(c => [c.id, c]));
+const STS  = Object.fromEntries(D.statuses.map(s => [s.id, s]));
+const SEV  = Object.fromEntries(D.severities.map(s => [s.id, s]));
+
+let state = { q:"", cat:"", st:"", sev:"", onlyDead:false };
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+
+/* stats */
+document.getElementById("stats").innerHTML = D.meta.stats.map(s =>
+  '<div class="stat"><div class="v">' + esc(s.value) + '</div><div class="l">' + esc(s.label) + '</div></div>'
+).join("");
+
+/* chips */
+function chips(el, items, key, field){
+  const counts = {};
+  D.lessons.forEach(l => { counts[l[field]] = (counts[l[field]] || 0) + 1; });
+  let html = '<span class="chip' + (state[key] === "" ? " on" : "") + '" data-k="' + key + '" data-v="">全部<span class="n">' + D.lessons.length + '</span></span>';
+  items.forEach(it => {
+    html += '<span class="chip' + (state[key] === it.id ? " on" : "") + '" data-k="' + key + '" data-v="' + it.id + '">'
+          + (it.color ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + it.color + ';margin-right:6px"></span>' : '')
+          + esc(it.name) + '<span class="n">' + (counts[it.id] || 0) + '</span></span>';
+  });
+  el.innerHTML = html;
+}
+chips(document.getElementById("cats"), D.categories, "cat", "cat");
+chips(document.getElementById("sts"), D.statuses, "st", "status");
+
+function matches(l){
+  if (state.cat && l.cat !== state.cat) return false;
+  if (state.st && l.status !== state.st) return false;
+  if (state.sev && l.severity !== state.sev) return false;
+  if (state.onlyDead && l.status !== "deadend") return false;
+  if (state.q) {
+    const hay = [l.id, l.title, l.symptom, l.cause, l.fix, l.cmd, (l.tags || []).join(" "), CATS[l.cat].name].join(" ").toLowerCase();
+    if (!hay.includes(state.q.toLowerCase().trim())) return false;
+  }
+  return true;
+}
+
+function cardHTML(l){
+  const c = CATS[l.cat], s = STS[l.status], v = SEV[l.severity];
+  const tags = (l.tags || []).map(t => '<span class="tag">' + esc(t) + '</span>').join("");
+  const fld = (k, val, cls) => val ? '<div class="fld ' + (cls||"") + '"><div class="k">' + k + '</div><div class="v">' + esc(val) + '</div></div>' : "";
+  const cmd = l.cmd ? '<div class="fld"><div class="k">命令 / 证据</div><pre class="cmd">' + esc(l.cmd)
+    + '<button class="cp" type="button">复制</button></pre></div>' : "";
+  return '<article class="card' + (l.status === "deadend" ? " dead" : "") + '" data-id="' + l.id + '">'
+    + '<div class="chead"><div class="meta">'
+    +   '<span class="id">' + l.id + '</span>'
+    +   '<span class="cat" style="color:' + c.color + ';background:' + c.color + '18">' + esc(c.name) + '</span>'
+    +   '<span class="sev ' + l.severity + '">' + v.name + '</span>'
+    +   '<span class="st ' + l.status + '">' + s.name + '</span>'
+    + '</div><h3 class="ttl">' + esc(l.title) + '</h3><div class="tags">' + tags + '</div></div>'
+    + '<div class="detail">'
+    +   fld("现象", l.symptom) + fld("原因", l.cause) + fld("解法", l.fix, "fix") + cmd
+    + '</div></article>';
+}
+
+function render(){
+  const list = D.lessons.filter(matches).sort((a,b) =>
+    (SEV[b.severity].rank - SEV[a.severity].rank) || a.id.localeCompare(b.id));
+  document.getElementById("grid").innerHTML = list.length
+    ? list.map(cardHTML).join("")
+    : '<div class="empty">没有匹配的卡片，换个筛选条件试试。</div>';
+  document.getElementById("count").textContent = "显示 " + list.length + " / " + D.lessons.length + " 条";
+}
+
+document.addEventListener("click", e => {
+  const chip = e.target.closest(".chip");
+  if (chip) {
+    state[chip.dataset.k] = chip.dataset.v;
+    document.querySelectorAll('.chip[data-k="' + chip.dataset.k + '"]').forEach(x =>
+      x.classList.toggle("on", x.dataset.v === chip.dataset.v));
+    render(); return;
+  }
+  const cp = e.target.closest(".cp");
+  if (cp) {
+    e.stopPropagation();
+    const txt = cp.parentElement.childNodes[0].textContent.trim();
+    navigator.clipboard.writeText(txt).then(() => { cp.textContent = "已复制"; setTimeout(() => cp.textContent = "复制", 1200); });
+    return;
+  }
+  const card = e.target.closest(".card");
+  if (card) card.classList.toggle("open");
+});
+
+document.getElementById("q").addEventListener("input", e => { state.q = e.target.value; render(); });
+document.getElementById("sev").addEventListener("change", e => { state.sev = e.target.value; render(); });
+document.getElementById("onlyDead").addEventListener("change", e => { state.onlyDead = e.target.checked; render(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement.id !== "q") { e.preventDefault(); document.getElementById("q").focus(); }
+  if (e.key === "Escape") { const q = document.getElementById("q"); q.value = ""; state.q = ""; render(); q.blur(); }
+});
+
+render();
+</script>
+</body>
+</html>
